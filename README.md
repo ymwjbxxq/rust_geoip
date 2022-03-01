@@ -1,7 +1,7 @@
 # Serverless Geo Location
 
-[MaxMind](MaxMind.com) provides IP intelligence through the GeoIP brand. Over 5,000 companies use GeoIP data to locate their Internet visitors, show them relevant content and ads, perform analytics, enforce digital rights, and efficiently route Internet traffic.
-[GeoIP2 IP](https://dev.maxmind.com/geoip?) intelligence products and services can provide data on geolocation, network information, anonymizer status and offer three types of data
+[MaxMind](https://www.maxmind.com/) provides IP intelligence through the GeoIP brand. Over 5,000 companies use GeoIP data to locate their Internet visitors, show them relevant content and ads, perform analytics, enforce digital rights, and efficiently route Internet traffic.
+[GeoIP2 IP](https://dev.maxmind.com/geoip) intelligence products and services can provide data on geolocation, network information, anonymizer status and offer three types of data
 
 - Binary Database
 - CSV Database
