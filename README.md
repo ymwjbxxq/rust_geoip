@@ -60,6 +60,8 @@ The SAM template deploys an Amazon API Gateway HTTP API and an AWS Lambda functi
 
 ### Testing
 
+**Binary files are not provided**
+
 Once the application is deployed, retrieve the HttpApiEndpoint value from CloudFormation Outputs. Then, either browse to the endpoint in a web browser or call the endpoint from Postman.
 
 Example GET Request: https://{HttpApiId}.execute-api.{region}.amazonaws.com/countrycode
