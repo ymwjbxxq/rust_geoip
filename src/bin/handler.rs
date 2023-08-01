@@ -2,16 +2,12 @@ use geo_ip::utils::api_helper::ApiHelper;
 use lambda_http::{http::StatusCode, run, service_fn, Error, IntoResponse, Request};
 use maxminddb::geoip2;
 use serde_json::json;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::{net::IpAddr, str::FromStr};
 use tokio::io::AsyncReadExt;
 
-#[macro_use]
-extern crate lazy_static;
-
-lazy_static! {
-    static ref CACHED_COUNTRY_BUFFER: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(vec![]));
-}
+static CACHED_COUNTRY_BUFFER: OnceLock<Mutex<Vec<u8>>> = OnceLock::new();
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -38,24 +34,41 @@ pub async fn function_handler(
     let header_ip_address = event.headers().get("x-forwarded-for");
     let bucket_name = std::env::var("BUCKET_NAME").expect("BUCKET_NAME must be set");
     if let Some(header_ip_address) = header_ip_address {
-        let mut buf = Vec::new();
-        if CACHED_COUNTRY_BUFFER.lock().unwrap().is_empty() {
-            let mut stream = client
+        CACHED_COUNTRY_BUFFER.get_or_init(|| {
+            let m = Vec::new();
+            Mutex::new(m)
+        });
+
+        if CACHED_COUNTRY_BUFFER
+            .get()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .is_empty()
+        {
+            let object = client
                 .get_object()
                 .bucket(bucket_name)
                 .key("GeoIP2-Country.mmdb")
                 .send()
-                .await?
-                .body
-                .into_async_read();
+                .await?;
 
+            let mut buf = Vec::with_capacity(object.content_length() as usize);
+            let mut stream = object.body.into_async_read();
             stream.read_to_end(&mut buf).await?;
 
-            CACHED_COUNTRY_BUFFER.lock().unwrap().append(&mut buf);
+            CACHED_COUNTRY_BUFFER
+                .get()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .append(&mut buf);
         }
 
-        let reader =
-            maxminddb::Reader::from_source(CACHED_COUNTRY_BUFFER.lock().unwrap().clone()).unwrap();
+        let reader = maxminddb::Reader::from_source(
+            CACHED_COUNTRY_BUFFER.get().unwrap().lock().unwrap().clone(),
+        )
+        .unwrap();
 
         let ip_address = IpAddr::from_str(header_ip_address.to_str().unwrap()).unwrap();
         let country: geoip2::Country = reader.lookup(ip_address).unwrap();
