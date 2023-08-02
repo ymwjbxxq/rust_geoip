@@ -1,4 +1,3 @@
-use geo_ip::utils::api_helper::ApiHelper;
 use lambda_http::{http::StatusCode, run, service_fn, Error, IntoResponse, Request};
 use maxminddb::geoip2;
 use serde_json::json;
@@ -21,7 +20,7 @@ async fn main() -> Result<(), Error> {
         std::env::var("BUCKET_NAME").expect("BUCKET_NAME must be set"),
     )
     .await?;
-    let reader = maxminddb::Reader::from_source(reader).unwrap();
+    let reader = maxminddb::Reader::from_source(reader)?;
 
     run(service_fn(|event: Request| {
         function_handler(&reader, event)
@@ -33,32 +32,32 @@ pub async fn function_handler(
     reader: &maxminddb::Reader<Vec<u8>>,
     event: Request,
 ) -> Result<impl IntoResponse, Error> {
-    println!("{:?}", &event);
-    let header_ip_address = event.headers().get("x-forwarded-for");
-    if let Some(header_ip_address) = header_ip_address {
-        let ip_address = IpAddr::from_str(header_ip_address.to_str().unwrap()).unwrap();
-        let country: geoip2::Country = reader.lookup(ip_address).unwrap();
-        if let Some(country) = country.country {
-            if let Some(iso_code) = country.iso_code {
-                let body = json!({ "countrycode": iso_code }).to_string();
-                return Ok(ApiHelper::response(
-                    StatusCode::OK,
-                    body,
-                    "application/json".to_string(),
-                ));
-            }
-        }
+    let header_ip_address = event
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|value| value.to_str().ok());
+    let Some(header_ip_address) = header_ip_address else {
+        return Ok((StatusCode::FORBIDDEN, json!({"message": "x-forwarded-for is not present in the header request"})));
+    };
 
-        return Ok(ApiHelper::response(
-            StatusCode::FORBIDDEN,
-            json!({"message": "IP not recognized"}).to_string(),
-            "application/json".to_string(),
-        ));
+    let ip_address = IpAddr::from_str(header_ip_address).ok();
+    let Some(ip_address) = ip_address else {
+      return Ok((StatusCode::FORBIDDEN, json!({"message": "IP is not present in the header request"})));
+    };
+
+    let iso_code = reader
+        .lookup::<geoip2::Country>(ip_address)
+        .ok()
+        .and_then(|entry| entry.country)
+        .and_then(|country| country.iso_code);
+
+    if let Some(iso_code) = iso_code {
+        return Ok((StatusCode::OK, json!({ "countrycode": iso_code })));
     }
-    Ok(ApiHelper::response(
+
+    Ok((
         StatusCode::FORBIDDEN,
-        json!({"message": "IP is not present in the header request"}).to_string(),
-        "application/json".to_string(),
+        json!({"message": "IP not recognized"}),
     ))
 }
 
